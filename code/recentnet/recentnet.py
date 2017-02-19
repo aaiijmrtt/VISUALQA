@@ -4,10 +4,11 @@ def create(config):
 	dim_b, dim_ih, dim_iw, dim_ic, dim_qv, dim_qi, dim_qt, dim_o = config.getint('batch'), config.getint('height'), config.getint('width'), config.getint('channels'), config.getint('vocab'), config.getint('embed'), config.getint('time'), config.getint('answers')
 	nlinear, preds, lrate, dstep, drate, optim, rfact, reg = getattr(tf.nn, config.get('nlinear')), config.getint('preds'), config.getfloat('lrate'), config.getint('dstep'), config.getfloat('drate'), getattr(tf.train, config.get('optim')), config.getfloat('rfact'), getattr(tf.contrib.layers, config.get('reg'))
 
+	assert dim_ic == dim_qi, 'dim_ic[%i] != dim_qi[%i]' %(dim_ic, dim_qi)
 	model = dict()
 
 	with tf.name_scope('embedding'):
-		model['wE'] = tf.Variable(tf.random_uniform([dim_qi, dim_qi], - np.sqrt(6. / (dim_qi + dim_qi)), np.sqrt(6. / (dim_qi + dim_qi))), collections = [tf.GraphKeys.GLOBAL_VARIABLES, tf.GraphKeys.REGULARIZATION_LOSSES], name = 'wE')
+		model['wE'] = tf.Variable(tf.random_uniform([dim_qv, dim_qi], - np.sqrt(6. / (dim_qv + dim_qi)), np.sqrt(6. / (dim_qv + dim_qi))), collections = [tf.GraphKeys.GLOBAL_VARIABLES, tf.GraphKeys.REGULARIZATION_LOSSES], name = 'wE')
 
 	with tf.name_scope('input_weights'):
 		model['Fq'] = tf.Variable(tf.random_uniform([dim_qt, dim_qi], - np.sqrt(6. / (dim_qt + dim_qi)), np.sqrt(6. / (dim_qt + dim_qi))), collections = [tf.GraphKeys.GLOBAL_VARIABLES], name = 'Fq')
