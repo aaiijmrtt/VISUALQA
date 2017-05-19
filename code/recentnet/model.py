@@ -14,8 +14,8 @@ def postpad(unpadded, pad, size):
 	return unpadded + [pad] * (size - len(unpadded))
 
 def featureextractor(placeholder):
-	logits, _ = nets.vgg.vgg_a(placeholder)
-	return logits
+	logits, subparts = nets.vgg.vgg_19(placeholder)
+	return subparts['vgg_19/conv5/conv5_4']
 
 def extractfeature(session, model, filename):
 	return session.run(model['featureextractor'], feed_dict = {model['rawimage']: np.load(filename).reshape(1, 224, 224, 3)})
@@ -31,8 +31,6 @@ def feed(model, config, filename, session):
 		images.append(image)
 		questions.append(question)
 		answers.append(answer)
-		print questions, answers
-		print images
 
 		if len(questions) == batch:
 			yield {model['query']: questions, model['image']: images, model['labels']: answers}
@@ -59,7 +57,7 @@ def run(model, config, session, summary, filename, train):
 def handler(signum, stack):
 	print datetime.datetime.now(), 'terminating execution'
 	print datetime.datetime.now(), 'saving model'
-	tf.train.Saver(variables + [model[name] for name in ['wE', 'Fq', 'Fv', 'h_', 'wU', 'wV', 'wW', 'wH', 'wR', 'gs']]).save(sess, config.get('global', 'save'))
+	tf.train.Saver(variables + newvariables).save(sess, config.get('global', 'save'))
 	sys.exit()
 
 if __name__ == '__main__':
@@ -72,21 +70,21 @@ if __name__ == '__main__':
 		model = dict()
 		model['rawimage'] = tf.placeholder(tf.float32, [1, 224, 224, 3])
 		model['featureextractor'] = featureextractor(model['rawimage'])
-		variables = tf.contrib.slim.get_variables_to_restore()
+		variables, newvariables = tf.contrib.slim.get_variables_to_restore(), [model[name] for name in ['wE', 'Fq', 'Fv', 'h_', 'wU', 'wV', 'wW', 'wH', 'wR', 'gs']]
 
 		if sys.argv[2] == 'init':
 			sess.run(tf.global_variables_initializer())
 			tf.train.Saver(variables).restore(sess, config.get('global', 'preload'))
 			model.update(recentnet.create(config['recentnet']))
-			sess.run(tf.initialize_variables([model[name] for name in ['wE', 'Fq', 'Fv', 'h_', 'wU', 'wV', 'wW', 'wH', 'wR', 'gs']]))
+			sess.run(tf.initialize_variables(newvariables))
 		else:
 			model.update(recentnet.create(config['recentnet']))
 			sess.run(tf.initialize_all_variables())
-			tf.train.Saver(variables + [model[name] for name in ['wE', 'Fq', 'Fv', 'h_', 'wU', 'wV', 'wW', 'wH', 'wR', 'gs']]).restore(sess, config.get('global', 'load'))
+			tf.train.Saver(variables + newvariables).restore(sess, config.get('global', 'load'))
 			print datetime.datetime.now(), 'running model'
 			summary = tf.summary.FileWriter(config.get('global', 'logs'), sess.graph)
 			returnvalue = run(model, config, sess, summary, '%s/%s' %(config.get('global', 'data'), sys.argv[2]), sys.argv[2])
 			print datetime.datetime.now(), 'returned value', returnvalue
-			
+
 		print datetime.datetime.now(), 'saving model'
-		tf.train.Saver(variables + [model[name] for name in ['wE', 'Fq', 'Fv', 'h_', 'wU', 'wV', 'wW', 'wH', 'wR', 'gs']]).save(sess, config.get('global', 'save'))
+		tf.train.Saver(variables + newvariables).save(sess, config.get('global', 'save'))
