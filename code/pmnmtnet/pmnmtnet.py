@@ -17,10 +17,13 @@ def create(config):
 		model['q'] = tf.unstack(tf.nn.embedding_lookup(model['wE'], model['qr']), name = 'q')
 
 	with tf.name_scope('image'):
-		model['image'] = tf.placeholder(tf.float32, [dim_b, dim_ip, dim_ih], name = 'image')
+		model['image'] = tf.placeholder(tf.float32, [dim_b, dim_ip, 4096], name = 'image')
 		model['im'] = tf.unstack(tf.transpose(model['image'], [1, 0, 2]), name = 'im')
+		model['wT'] = tf.Variable(tf.random_uniform([4096, dim_ih], - np.sqrt(6. / (4096 + dim_ih)), np.sqrt(6. / (4096 + dim_ih))), collections = [tf.GraphKeys.GLOBAL_VARIABLES, tf.GraphKeys.REGULARIZATION_LOSSES], name = 'wT')
+		model['bT'] = tf.Variable(tf.random_uniform([1, dim_ih], - np.sqrt(6. / dim_ih), np.sqrt(6. / dim_ih)), name = 'bT')
 		for i in xrange(dim_d):
-			model['c_%i_-1' %i] = model['im']
+			model['c_%i_%i' %(i, -1)] = [nlinear(tf.add(tf.matmul(im, model['wT']), model['bT'])) for im in model['im']]
+			model['c_%i_%i' %(i, dim_qt)] = [nlinear(tf.add(tf.matmul(im, model['wT']), model['bT'])) for im in model['im']]
 
 	for i in xrange(dim_d):
 		with tf.name_scope('input_%i' %i):
@@ -29,18 +32,24 @@ def create(config):
 					model['x_%i_%i_%i' %(i, ii, iii)] = model['q'][i] if i == 0 else model['h_%i_%i_%i' %(i - 1, ii, iii)]
 
 		with tf.name_scope('inputgate_%i' %i):
-			model['wI_%i' %i] = tf.Variable(tf.random_uniform([dim_qi, dim_qi], - np.sqrt(6. / (dim_qi + dim_qi)), np.sqrt(6. / (dim_qi + dim_qi))), collections = [tf.GraphKeys.GLOBAL_VARIABLES, tf.GraphKeys.REGULARIZATION_LOSSES], name = 'wI_%i' %i)
-			model['bI_%i' %i] = tf.Variable(tf.random_uniform([1, dim_qi], - np.sqrt(6. / dim_qi), np.sqrt(6. / dim_qi)), name = 'bI_%i' %i)
+			model['fwI_%i' %i] = tf.Variable(tf.random_uniform([dim_qi, dim_qi], - np.sqrt(6. / (dim_qi + dim_qi)), np.sqrt(6. / (dim_qi + dim_qi))), collections = [tf.GraphKeys.GLOBAL_VARIABLES, tf.GraphKeys.REGULARIZATION_LOSSES], name = 'fwI_%i' %i)
+			model['fbI_%i' %i] = tf.Variable(tf.random_uniform([1, dim_qi], - np.sqrt(6. / dim_qi), np.sqrt(6. / dim_qi)), name = 'fbI_%i' %i)
+			model['bwI_%i' %i] = tf.Variable(tf.random_uniform([dim_qi, dim_qi], - np.sqrt(6. / (dim_qi + dim_qi)), np.sqrt(6. / (dim_qi + dim_qi))), collections = [tf.GraphKeys.GLOBAL_VARIABLES, tf.GraphKeys.REGULARIZATION_LOSSES], name = 'bwI_%i' %i)
+			model['bbI_%i' %i] = tf.Variable(tf.random_uniform([1, dim_qi], - np.sqrt(6. / dim_qi), np.sqrt(6. / dim_qi)), name = 'bbI_%i' %i)
 			for ii in xrange(dim_qt):
 				for iii in xrange(dim_ip):
-					model['i_%i_%i_%i' %(i, ii, iii)] = tf.nn.sigmoid(tf.add(tf.matmul(model['x_%i_%i_%i' %(i, ii, iii)], model['wI_%i' %i]), model['bI_%i' %i]), name = 'i_%i_%i_%i' %(i, ii, iii))
+					model['fi_%i_%i_%i' %(i, ii, iii)] = tf.nn.sigmoid(tf.add(tf.matmul(model['x_%i_%i_%i' %(i, ii, iii)], model['fwI_%i' %i]), model['fbI_%i' %i]), name = 'fi_%i_%i_%i' %(i, ii, iii))
+					model['bi_%i_%i_%i' %(i, ii, iii)] = tf.nn.sigmoid(tf.add(tf.matmul(model['x_%i_%i_%i' %(i, ii, iii)], model['bwI_%i' %i]), model['bbI_%i' %i]), name = 'bi_%i_%i_%i' %(i, ii, iii))
 
 		with tf.name_scope('forgetgate_%i' %i):
-			model['wF_%i' %i] = tf.Variable(tf.random_uniform([dim_qi, dim_qi], - np.sqrt(6. / (dim_qi + dim_qi)), np.sqrt(6. / (dim_qi + dim_qi))), collections = [tf.GraphKeys.GLOBAL_VARIABLES, tf.GraphKeys.REGULARIZATION_LOSSES], name = 'wF_%i' %i)
-			model['bF_%i' %i] = tf.Variable(tf.random_uniform([1, dim_qi], - np.sqrt(6. / (dim_qi+ dim_qi)), np.sqrt(6. / dim_qi)), name = 'bF_%i' %i)
+			model['fwF_%i' %i] = tf.Variable(tf.random_uniform([dim_qi, dim_qi], - np.sqrt(6. / (dim_qi + dim_qi)), np.sqrt(6. / (dim_qi + dim_qi))), collections = [tf.GraphKeys.GLOBAL_VARIABLES, tf.GraphKeys.REGULARIZATION_LOSSES], name = 'fwF_%i' %i)
+			model['fbF_%i' %i] = tf.Variable(tf.random_uniform([1, dim_qi], - np.sqrt(6. / dim_qi), np.sqrt(6. / dim_qi)), name = 'fbF_%i' %i)
+			model['bwF_%i' %i] = tf.Variable(tf.random_uniform([dim_qi, dim_qi], - np.sqrt(6. / (dim_qi + dim_qi)), np.sqrt(6. / (dim_qi + dim_qi))), collections = [tf.GraphKeys.GLOBAL_VARIABLES, tf.GraphKeys.REGULARIZATION_LOSSES], name = 'bwF_%i' %i)
+			model['bbF_%i' %i] = tf.Variable(tf.random_uniform([1, dim_qi], - np.sqrt(6. / dim_qi), np.sqrt(6. / dim_qi)), name = 'bbF_%i' %i)
 			for ii in xrange(dim_qt):
 				for iii in xrange(dim_ip):
-					model['f_%i_%i_%i' %(i, ii, iii)] = tf.nn.sigmoid(tf.add(tf.matmul(model['x_%i_%i_%i' %(i, ii, iii)], model['wF_%i' %i]), model['bF_%i' %i]), name = 'f_%i_%i_%i' %(i, ii, iii))
+					model['ff_%i_%i_%i' %(i, ii, iii)] = tf.nn.sigmoid(tf.add(tf.matmul(model['x_%i_%i_%i' %(i, ii, iii)], model['fwF_%i' %i]), model['fbF_%i' %i]), name = 'fF_%i_%i_%i' %(i, ii, iii))
+					model['bf_%i_%i_%i' %(i, ii, iii)] = tf.nn.sigmoid(tf.add(tf.matmul(model['x_%i_%i_%i' %(i, ii, iii)], model['bwF_%i' %i]), model['bbF_%i' %i]), name = 'bF_%i_%i_%i' %(i, ii, iii))
 
 		with tf.name_scope('outputgate_%i' %i):
 			model['wO_%i' %i] = tf.Variable(tf.random_uniform([dim_qi, dim_qi], - np.sqrt(6. / (dim_qi + dim_qi)), np.sqrt(6. / (dim_qi + dim_qi))), collections = [tf.GraphKeys.GLOBAL_VARIABLES, tf.GraphKeys.REGULARIZATION_LOSSES], name = 'wO_%i' %i)
@@ -50,15 +59,26 @@ def create(config):
 					model['o_%i_%i_%i' %(i, ii, iii)] = tf.nn.sigmoid(tf.add(tf.matmul(model['x_%i_%i_%i' %(i, ii, iii)], model['wO_%i' %i]), model['bO_%i' %i]), name = 'o_%i_%i_%i' %(i, ii, iii))
 
 		with tf.name_scope('cellstate_%i' %i):
-			model['wC_%i' %i] = tf.Variable(tf.random_uniform([dim_qi, dim_qi], - np.sqrt(6. / (dim_qi + dim_qi)), np.sqrt(6. / (dim_qi + dim_qi))), collections = [tf.GraphKeys.GLOBAL_VARIABLES, tf.GraphKeys.REGULARIZATION_LOSSES], name = 'wC_%i' %i)
-			model['bC_%i' %i] = tf.Variable(tf.random_uniform([1, dim_qi], - np.sqrt(6. / dim_qi), np.sqrt(6. / dim_qi)), name = 'bC_%i' %i)
+			model['fwC_%i' %i] = tf.Variable(tf.random_uniform([dim_qi, dim_qi], - np.sqrt(6. / (dim_qi + dim_qi)), np.sqrt(6. / (dim_qi + dim_qi))), collections = [tf.GraphKeys.GLOBAL_VARIABLES, tf.GraphKeys.REGULARIZATION_LOSSES], name = 'fwC_%i' %i)
+			model['fbC_%i' %i] = tf.Variable(tf.random_uniform([1, dim_qi], - np.sqrt(6. / dim_qi), np.sqrt(6. / dim_qi)), name = 'fbC_%i' %i)
+			model['bwC_%i' %i] = tf.Variable(tf.random_uniform([dim_qi, dim_qi], - np.sqrt(6. / (dim_qi + dim_qi)), np.sqrt(6. / (dim_qi + dim_qi))), collections = [tf.GraphKeys.GLOBAL_VARIABLES, tf.GraphKeys.REGULARIZATION_LOSSES], name = 'bwC_%i' %i)
+			model['bbC_%i' %i] = tf.Variable(tf.random_uniform([1, dim_qi], - np.sqrt(6. / dim_qi), np.sqrt(6. / dim_qi)), name = 'bbC_%i' %i)
 			for ii in xrange(dim_qt):
 				for iii in xrange(dim_ip):
-					model['cc_%i_%i_%i' %(i, ii, iii)] = model['c_%i_%i' %(i, ii - 1)][iii] if ii == 0 else model['c_%i_%i_%i' %(i, ii - 1, iii)]
-					model['c_%i_%i_%i' %(i, ii, iii)] = tf.where(tf.equal(model['qt'][ii], tf.zeros([dim_b], tf.int32)), model['cc_%i_%i_%i' %(i, ii, iii)], tf.add(tf.multiply(model['f_%i_%i_%i' %(i, ii, iii)], model['cc_%i_%i_%i' %(i, ii, iii)]), tf.multiply(model['i_%i_%i_%i' %(i, ii, iii)], tf.nn.tanh(tf.add(tf.matmul(model['x_%i_%i_%i' %(i, ii, iii)], model['wC_%i' %i]), model['bC_%i' %i])))), name = 'c_%i_%i_%i' %(i, ii, iii))
+					model['fcc_%i_%i_%i' %(i, ii, iii)] = model['c_%i_%i' %(i, ii - 1)][iii] if ii == 0 else model['fc_%i_%i_%i' %(i, ii - 1, iii)]
+					model['fc_%i_%i_%i' %(i, ii, iii)] = tf.where(tf.equal(model['qt'][ii], tf.zeros([dim_b], tf.int32)), model['fcc_%i_%i_%i' %(i, ii, iii)], tf.add(tf.multiply(model['ff_%i_%i_%i' %(i, ii, iii)], model['fcc_%i_%i_%i' %(i, ii, iii)]), tf.multiply(model['fi_%i_%i_%i' %(i, ii, iii)], tf.nn.tanh(tf.add(tf.matmul(model['x_%i_%i_%i' %(i, ii, iii)], model['fwC_%i' %i]), model['fbC_%i' %i])))), name = 'fc_%i_%i_%i' %(i, ii, iii))
+
+			for ii in reversed(xrange(dim_qt)):
+				for iii in xrange(dim_ip):
+					model['bcc_%i_%i_%i' %(i, ii, iii)] = model['c_%i_%i' %(i, ii + 1)][iii] if ii == dim_qt - 1 else model['bc_%i_%i_%i' %(i, ii + 1, iii)]
+					model['bc_%i_%i_%i' %(i, ii, iii)] = tf.where(tf.equal(model['qt'][ii], tf.zeros([dim_b], tf.int32)), model['bcc_%i_%i_%i' %(i, ii, iii)], tf.add(tf.multiply(model['bf_%i_%i_%i' %(i, ii, iii)], model['bcc_%i_%i_%i' %(i, ii, iii)]), tf.multiply(model['bi_%i_%i_%i' %(i, ii, iii)], tf.nn.tanh(tf.add(tf.matmul(model['x_%i_%i_%i' %(i, ii, iii)], model['bwC_%i' %i]), model['bbC_%i' %i])))), name = 'bc_%i_%i_%i' %(i, ii, iii))
+
+			for ii in xrange(dim_qt):
+				for iii in xrange(dim_ip):
+					model['c_%i_%i_%i' %(i, ii, iii)] = tf.concat([model['fc_%i_%i_%i' %(i, ii, iii)], model['bc_%i_%i_%i' %(i, ii, iii)]], 1, 'c_%i_%i_%i' %(i, ii, iii))
 
 		with tf.name_scope('hidden_%i' %i):
-			model['wZ_%i' %i] = tf.Variable(tf.random_uniform([dim_qi, dim_qi], - np.sqrt(6. / (dim_qi + dim_qt)), np.sqrt(6. / (dim_qt + dim_qi))), collections = [tf.GraphKeys.GLOBAL_VARIABLES, tf.GraphKeys.REGULARIZATION_LOSSES], name = 'wZ_%i' %i)
+			model['wZ_%i' %i] = tf.Variable(tf.random_uniform([2 * dim_qi, dim_qi], - np.sqrt(6. / (dim_qi + dim_qi)), np.sqrt(6. / (dim_qi + dim_qi))), collections = [tf.GraphKeys.GLOBAL_VARIABLES, tf.GraphKeys.REGULARIZATION_LOSSES], name = 'wZ_%i' %i)
 			model['bZ_%i' %i] = tf.Variable(tf.random_uniform([1, dim_qi], - np.sqrt(6. / dim_qi), np.sqrt(6. / dim_qi)), name = 'bZ_%i' %i)
 			for ii in xrange(dim_qt):
 				for iii in xrange(dim_ip):
